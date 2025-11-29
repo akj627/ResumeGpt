@@ -1,5 +1,95 @@
+<!DOCTYPE html>
 <html>
+<head>
+  <title>AJ Resume Assistant</title>
+  <style>
+    body { font-family: Arial; margin: 40px; max-width: 800px; }
+    #chat { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; }
+    #input { width: 100%; padding: 10px; margin-top: 10px; }
+    .user { font-weight: bold; margin-top: 10px; }
+    .assistant { margin-top: 5px; }
+  </style>
+</head>
 <body>
-Resume
-</body
+
+<h1>AJ's AI Résumé Assistant</h1>
+
+<h3>Résumé</h3>
+<p>
+  <!-- Replace this with your actual résumé HTML or text -->
+  Senior Engineering Leader with 11 years at FIA Tech...
+</p>
+
+<hr>
+
+<h3>Chat with my Résumé</h3>
+<div id="chat"></div>
+<input id="input" placeholder="Ask a question about my experience..." />
+
+<script>
+const API_KEY = "YOUR_OPENAI_API_KEY"; 
+const ASSISTANT_ID = "YOUR_ASSISTANT_ID";
+
+let threadId = null;
+
+document.getElementById("input").addEventListener("keydown", async (e) => {
+  if (e.key === "Enter") {
+    const question = e.target.value;
+    e.target.value = "";
+    addMessage("user", question);
+
+    // Create thread only once
+    if (!threadId) {
+      const thread = await fetch("https://api.openai.com/v1/threads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` }
+      }).then(res => res.json());
+      threadId = thread.id;
+    }
+
+    // Add user message
+    await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` },
+      body: JSON.stringify({ role: "user", content: question })
+    });
+
+    // Run the assistant
+    const run = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` },
+      body: JSON.stringify({ assistant_id: ASSISTANT_ID })
+    }).then(res => res.json());
+
+    // Poll until completed
+    let result;
+    while (true) {
+      result = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${run.id}`, {
+        headers: { Authorization: `Bearer ${API_KEY}` }
+      }).then(res => res.json());
+      if (result.status === "completed") break;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    // Fetch assistant messages
+    const messages = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+      headers: { Authorization: `Bearer ${API_KEY}` }
+    }).then(res => res.json());
+
+    const assistantMsg = messages.data[0].content[0].text.value;
+    addMessage("assistant", assistantMsg);
+  }
+});
+
+function addMessage(role, text) {
+  const div = document.getElementById("chat");
+  const msg = document.createElement("div");
+  msg.className = role;
+  msg.innerText = `${role.toUpperCase()}: ${text}`;
+  div.appendChild(msg);
+  div.scrollTop = div.scrollHeight;
+}
+</script>
+
+</body>
 </html>
